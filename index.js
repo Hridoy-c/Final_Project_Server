@@ -32,6 +32,9 @@ app.get("/", (req, res) => {
     res.send("Hello World!");
 });
 
+
+// Users apis
+
 app.get("/user", async (req, res) => {
     try {
         const users = await usersCollection.find().toArray();
@@ -41,6 +44,17 @@ app.get("/user", async (req, res) => {
     }
 });
 
+
+// Jobs apis
+
+app.get("/api/jobs", async (req, res) => {
+  try {
+    const jobs = await jobsCollection.find().toArray();    
+    res.send(jobs);
+  } catch (err) {
+    console.dir(err);
+  }
+}); 
 
 app.post("/api/jobs", async (req, res) => {
   try {
@@ -52,6 +66,29 @@ app.post("/api/jobs", async (req, res) => {
     res.status(500).send({ message: "Failed to add job" });
   }
 });
+
+app.delete("/api/jobs/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = await jobsCollection.deleteOne({ _id: id });
+    res.send(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to delete job" });
+  }
+});
+
+app.patch("/api/jobs/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const updatedJob = req.body;
+    const result = await jobsCollection.updateOne({ _id: id }, { $set: updatedJob });
+    res.send(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to update job" });
+  }
+}); 
 
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
