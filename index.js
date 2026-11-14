@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 import 'dotenv/config'
 
 const app = express();
@@ -49,12 +49,22 @@ app.get("/user", async (req, res) => {
 
 app.get("/api/jobs", async (req, res) => {
   try {
-    const jobs = await jobsCollection.find().toArray();    
+    const { recruiterId } = req.query;
+
+    const query = recruiterId ? { recruiterId } : {};
+
+    const jobs = await jobsCollection
+      .find(query)
+      .sort({ jobPostDate: -1 })
+      .toArray();
+
     res.send(jobs);
   } catch (err) {
-    console.dir(err);
+    console.error(err);
+    res.status(500).send({ message: "Failed to fetch jobs" });
   }
-}); 
+});
+
 
 app.post("/api/jobs", async (req, res) => {
   try {
@@ -70,7 +80,17 @@ app.post("/api/jobs", async (req, res) => {
 app.delete("/api/jobs/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const result = await jobsCollection.deleteOne({ _id: id });
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid job id" });
+    }
+
+    const result = await jobsCollection.deleteOne({ _id: new ObjectId (id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({ message: "Job not found" });
+    }
+
     res.send(result);
   } catch (err) {
     console.error(err);
@@ -81,14 +101,29 @@ app.delete("/api/jobs/:id", async (req, res) => {
 app.patch("/api/jobs/:id", async (req, res) => {
   try {
     const id = req.params.id;
-    const updatedJob = req.body;
-    const result = await jobsCollection.updateOne({ _id: id }, { $set: updatedJob });
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid job id" });
+    }
+
+    // never let the client overwrite _id
+    const { _id, ...updatedJob } = req.body;
+
+    const result = await jobsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updatedJob },
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({ message: "Job not found" });
+    }
+
     res.send(result);
   } catch (err) {
     console.error(err);
     res.status(500).send({ message: "Failed to update job" });
   }
-}); 
+});
 
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
