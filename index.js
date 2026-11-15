@@ -1,14 +1,13 @@
 import express from "express";
 import cors from "cors";
-import { MongoClient, ObjectId } from 'mongodb';
-import 'dotenv/config'
+import { MongoClient, ObjectId } from "mongodb";
+import "dotenv/config";
 
 const app = express();
 const port = process.env.PORT || 8000;
 
 app.use(cors());
 app.use(express.json());
-
 
 const client = new MongoClient(process.env.MONGODB_URI);
 
@@ -22,49 +21,72 @@ export async function connectToMongoDB() {
   }
 }
 
-const connected= await connectToMongoDB();
+const connected = await connectToMongoDB();
 const db = connected.db("Final_Project");
 const usersCollection = db.collection("user");
 const jobsCollection = db.collection("jobs");
 
-
 app.get("/", (req, res) => {
-    res.send("Hello World!");
+  res.send("Hello World!");
 });
-
 
 // Users apis
 
 app.get("/user", async (req, res) => {
-    try {
-        const users = await usersCollection.find().toArray();
-        res.send(users);
-    } catch (err) {
-        console.dir(err);
-    }
+  try {
+    const users = await usersCollection.find().toArray();
+    res.send(users);
+  } catch (err) {
+    console.dir(err);
+  }
 });
-
 
 // Jobs apis
 
 app.get("/api/jobs", async (req, res) => {
   try {
-    const { recruiterId } = req.query;
+    const query = {};
 
-    const query = recruiterId ? { recruiterId } : {};
+    if (req.query.type) {
+      query.type = req.query.type;
+    }
 
-    const jobs = await jobsCollection
-      .find(query)
-      .sort({ jobPostDate: -1 })
-      .toArray();
+    if (req.query.frequency) {
+      query.frequency = req.query.frequency;
+    }
 
+    if (req.query.recruiterId) {
+      query.recruiterId = req.query.recruiterId;
+    }
+
+    if (req.query.search && req.query.search.trim()) {
+      const fields = [
+        "title",
+        "company",
+        "location",
+        "responsibilities",
+        "requirements",
+      ];
+
+      const words = req.query.search
+        .trim()
+        .split(/\s+/)
+        .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+      query.$and = words.map((word) => ({
+        $or: fields.map((field) => ({
+          [field]: { $regex: word, $options: "i" },
+        })),
+      }));
+    }
+
+    const jobs = await jobsCollection.find(query).toArray();
     res.send(jobs);
   } catch (err) {
     console.error(err);
     res.status(500).send({ message: "Failed to fetch jobs" });
   }
 });
-
 
 app.post("/api/jobs", async (req, res) => {
   try {
@@ -85,7 +107,7 @@ app.delete("/api/jobs/:id", async (req, res) => {
       return res.status(400).send({ message: "Invalid job id" });
     }
 
-    const result = await jobsCollection.deleteOne({ _id: new ObjectId (id) });
+    const result = await jobsCollection.deleteOne({ _id: new ObjectId(id) });
 
     if (result.deletedCount === 0) {
       return res.status(404).send({ message: "Job not found" });
@@ -126,5 +148,5 @@ app.patch("/api/jobs/:id", async (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+  console.log(`Server is running on port ${port}`);
 });
