@@ -25,10 +25,17 @@ const connected = await connectToMongoDB();
 const db = connected.db("Final_Project");
 const usersCollection = db.collection("user");
 const jobsCollection = db.collection("jobs");
+const applicationsCollection = db.collection("applications");
+
+
+
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
+
+
+
 
 // Users apis
 
@@ -40,6 +47,10 @@ app.get("/user", async (req, res) => {
     console.dir(err);
   }
 });
+
+
+
+
 
 // Jobs apis
 
@@ -217,6 +228,36 @@ app.patch("/api/jobs/:id", async (req, res) => {
     res.status(500).send({ message: "Failed to update job" });
   }
 });
+
+
+
+
+// Applications apis  
+
+
+app.post("/api/applications", async (req, res) => {
+  try {
+    const application = req.body;
+    const result = await applicationsCollection.insertOne(application);
+    res.status(201).send(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to add application" });
+  }
+})
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
