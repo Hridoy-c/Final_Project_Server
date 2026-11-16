@@ -138,6 +138,27 @@ app.get("/api/jobs", async (req, res) => {
   }
 });
 
+app.get("/api/jobs/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid job id" });
+    }
+
+    const job = await jobsCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!job) {
+      return res.status(404).send({ message: "Job not found" });
+    }
+
+    res.send(job);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to fetch job" });
+  }
+});
+
 app.post("/api/jobs", async (req, res) => {
   try {
     const job = req.body;
