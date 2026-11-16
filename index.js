@@ -46,32 +46,47 @@ app.get("/user", async (req, res) => {
 app.get("/api/jobs", async (req, res) => {
   try {
     const query = {};
+    const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const num = (f) => ({
+      $convert: { input: `$${f}`, to: "double", onError: 0, onNull: 0 },
+    });
 
     if (req.query.type) {
-      query.type = req.query.type;
+      const types = [].concat(req.query.type)
+        .flatMap((t) => String(t).split(","))
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (types.length) query.type = { $in: types };
     }
 
-    if (req.query.frequency) {
-      query.frequency = req.query.frequency;
+    if (req.query.category) {
+      query.category = req.query.category;
+    }
+
+    if (req.query.isRemote === "true") {
+      query.isRemote = true;
+    }
+
+    if (req.query.location) {
+      query.location = { $regex: escapeRegex(req.query.location), $options: "i" };
     }
 
     if (req.query.recruiterId) {
       query.recruiterId = req.query.recruiterId;
     }
 
-    if (req.query.search && req.query.search.trim()) {
-      const fields = [
-        "title",
-        "company",
-        "location",
-        "responsibilities",
-        "requirements",
-      ];
+    const exprs = [];
+    if (req.query.minSalary && !isNaN(req.query.minSalary)) {
+      exprs.push({ $gte: [num("maxSalary"), Number(req.query.minSalary)] });
+    }
+    if (req.query.maxSalary && !isNaN(req.query.maxSalary)) {
+      exprs.push({ $lte: [num("minSalary"), Number(req.query.maxSalary)] });
+    }
+    if (exprs.length) query.$expr = { $and: exprs };
 
-      const words = req.query.search
-        .trim()
-        .split(/\s+/)
-        .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    if (req.query.search && req.query.search.trim()) {
+      const fields = ["title", "company", "location", "responsibilities", "requirements"];
+      const words = req.query.search.trim().split(/\s+/).map(escapeRegex);
 
       query.$and = words.map((word) => ({
         $or: fields.map((field) => ({
@@ -80,8 +95,43 @@ app.get("/api/jobs", async (req, res) => {
       }));
     }
 
-    const jobs = await jobsCollection.find(query).toArray();
-    res.send(jobs);
+    const sortMap = {
+      recent: { jobPostDate: -1 },
+      "salary-high": { _max: -1 },
+      "salary-low": { _min: 1 },
+      deadline: { deadline: 1 },
+    };
+    const sortStage = sortMap[req.query.sort] || sortMap.recent;
+
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit) || 10, 1);
+
+    const [result] = await jobsCollection
+      .aggregate([
+        { $match: query },
+        { $addFields: { _max: num("maxSalary"), _min: num("minSalary") } },
+        {
+          $facet: {
+            jobs: [
+              { $sort: sortStage },
+              { $skip: (page - 1) * limit },
+              { $limit: limit },
+              { $project: { _max: 0, _min: 0 } },
+            ],
+            total: [{ $count: "count" }],
+          },
+        },
+      ])
+      .toArray();
+
+    const total = result.total[0]?.count ?? 0;
+
+    res.send({
+      jobs: result.jobs,
+      total,
+      page,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).send({ message: "Failed to fetch jobs" });
