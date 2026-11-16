@@ -235,6 +235,16 @@ app.patch("/api/jobs/:id", async (req, res) => {
 // Applications apis  
 
 
+app.get("/api/applications", async (req, res) => {
+  try {
+    const applications = await applicationsCollection.find().toArray();
+    res.send(applications);
+  } catch (err) {
+    console.dir(err);
+  }
+});
+
+
 app.post("/api/applications", async (req, res) => {
   try {
     const application = req.body;
